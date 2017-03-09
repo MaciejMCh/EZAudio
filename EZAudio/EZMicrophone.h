@@ -154,6 +154,9 @@
  */
 @property (nonatomic, strong) EZOutput *output;
 
+@property (nonatomic, assign, readonly) int framesPerPacket;
+@property (nonatomic, copy) void (^dsp)(float *buffer, int count);
+
 //------------------------------------------------------------------------------
 #pragma mark - Initializers
 //------------------------------------------------------------------------------

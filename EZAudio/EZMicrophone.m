@@ -27,6 +27,7 @@
 #import "EZAudioFloatConverter.h"
 #import "EZAudioUtilities.h"
 #import "EZAudioDevice.h"
+#import <CoreAudio/CoreAudio.h>
 
 //------------------------------------------------------------------------------
 #pragma mark - Data Structures
@@ -36,7 +37,6 @@ typedef struct EZMicrophoneInfo
 {
     AudioUnit                     audioUnit;
     AudioBufferList              *audioBufferList;
-    float                       **floatData;
     AudioStreamBasicDescription   inputFormat;
     AudioStreamBasicDescription   streamFormat;
 } EZMicrophoneInfo;
@@ -57,8 +57,11 @@ static OSStatus EZAudioMicrophoneCallback(void                       *inRefCon,
 //------------------------------------------------------------------------------
 
 @interface EZMicrophone ()
-@property (nonatomic, strong) EZAudioFloatConverter *floatConverter;
+
 @property (nonatomic, assign) EZMicrophoneInfo      *info;
+@property (nonatomic, assign) float *dspBuffer;
+@property (nonatomic, assign) int bufferSize;
+
 @end
 
 @implementation EZMicrophone
@@ -73,8 +76,6 @@ static OSStatus EZAudioMicrophoneCallback(void                       *inRefCon,
     [EZAudioUtilities checkResult:AudioUnitUninitialize(self.info->audioUnit)
                         operation:"Failed to unintialize audio unit for microphone"];
     [EZAudioUtilities freeBufferList:self.info->audioBufferList];
-    [EZAudioUtilities freeFloatBuffers:self.info->floatData
-                      numberOfChannels:self.info->streamFormat.mChannelsPerFrame];
     free(self.info);
 }
 
@@ -90,6 +91,7 @@ static OSStatus EZAudioMicrophoneCallback(void                       *inRefCon,
         self.info = (EZMicrophoneInfo *)malloc(sizeof(EZMicrophoneInfo));
         memset(self.info, 0, sizeof(EZMicrophoneInfo));
         [self setup];
+        self.dspBuffer = malloc(2048);
     }
     return self;
 }
@@ -394,6 +396,7 @@ static OSStatus EZAudioMicrophoneCallback(void                       *inRefCon,
 
 - (UInt32)maximumBufferSize
 {
+    return 128;
     UInt32 maximumBufferSize;
     UInt32 propSize = sizeof(maximumBufferSize);
     [EZAudioUtilities checkResult:AudioUnitGetProperty(self.info->audioUnit,
@@ -426,12 +429,6 @@ static OSStatus EZAudioMicrophoneCallback(void                       *inRefCon,
 
 - (void)setAudioStreamBasicDescription:(AudioStreamBasicDescription)asbd
 {
-    if (self.floatConverter)
-    {
-        [EZAudioUtilities freeBufferList:self.info->audioBufferList];
-        [EZAudioUtilities freeFloatBuffers:self.info->floatData
-                          numberOfChannels:self.info->streamFormat.mChannelsPerFrame];
-    }
     
     //
     // Set new stream format
@@ -456,11 +453,9 @@ static OSStatus EZAudioMicrophoneCallback(void                       *inRefCon,
     // Allocate scratch buffers
     //
     UInt32 maximumBufferSize = [self maximumBufferSize];
+    self.bufferSize = [self maximumBufferSize];
     BOOL isInterleaved = [EZAudioUtilities isInterleaved:asbd];
     UInt32 channels = asbd.mChannelsPerFrame;
-    self.floatConverter = [[EZAudioFloatConverter alloc] initWithInputFormat:asbd];
-    self.info->floatData = [EZAudioUtilities floatBuffersWithNumberOfFrames:maximumBufferSize
-                                                      numberOfChannels:channels];
     self.info->audioBufferList = [EZAudioUtilities audioBufferListWithNumberOfFrames:maximumBufferSize
                                                                     numberOfChannels:channels
                                                                          interleaved:isInterleaved];
@@ -536,6 +531,37 @@ static OSStatus EZAudioMicrophoneCallback(void                       *inRefCon,
                         operation:"Couldn't set default device on I/O unit"];
 #endif
     
+    
+    /* get the ID of the default input hardware */
+    AudioDeviceID micID;
+    UInt32 n;
+    OSStatus rc;
+    n = sizeof(micID);
+    rc = AudioHardwareGetProperty(kAudioHardwarePropertyDefaultInputDevice,
+                                  &n, &micID);
+    
+    /* tweak mic buffer sizes */
+    n = self.framesPerPacket; /* 411 frames @ 44100 Htz = .01 seconds */
+    rc = AudioDeviceSetProperty(micID, NULL, 0, 1,
+                                kAudioDevicePropertyBufferFrameSize,
+                                sizeof(n), &n);
+    
+    
+    
+    n = sizeof(micID);
+    rc = AudioHardwareGetProperty(kAudioHardwarePropertyDefaultOutputDevice,
+                                  &n, &micID);
+    
+    /* tweak mic buffer sizes */
+    n = self.framesPerPacket; /* 411 frames @ 44100 Htz = .01 seconds */
+    rc = AudioDeviceSetProperty(micID, NULL, 0, 1,
+                                kAudioDevicePropertyBufferFrameSize,
+                                sizeof(n), &n);
+    
+    
+//    [EZAudioDevice setProperty:512 ForSelector:kAudioDevicePropertyBufferFrameSize withDeviceID:deviceId];
+//    NSString *xD = [EZAudioDevice stringPropertyForSelector:kAudioDevicePropertyBufferFrameSize withDeviceID:deviceId];
+    
     //
     // Store device
     //
@@ -548,6 +574,10 @@ static OSStatus EZAudioMicrophoneCallback(void                       *inRefCon,
     {
         [self.delegate microphone:self changedDevice:device];
     }
+}
+
+- (int)framesPerPacket {
+    return 128;
 }
 
 //------------------------------------------------------------------------------
@@ -570,6 +600,8 @@ static OSStatus EZAudioMicrophoneCallback(void                       *inRefCon,
         withNumberOfFrames:(UInt32)frames
                  timestamp:(const AudioTimeStamp *)timestamp
 {
+    EZMicrophoneInfo *info = self.info;
+    
     memcpy(audioBufferList,
            self.info->audioBufferList,
            sizeof(AudioBufferList) + (self.info->audioBufferList->mNumberBuffers - 1)*sizeof(AudioBuffer));
@@ -593,7 +625,7 @@ static OSStatus EZAudioMicrophoneCallback(void                       *inRefCon,
 #if TARGET_OS_IPHONE
     return 1;
 #elif TARGET_OS_MAC
-    return (UInt32)self.device.inputChannelCount;
+    return 1;
 #endif
 }
 
@@ -633,33 +665,12 @@ static OSStatus EZAudioMicrophoneCallback(void                       *inRefCon,
                                       inNumberFrames,
                                       info->audioBufferList);
     
-    //
-    // Notify delegate of new buffer list to process
-    //
-    if ([microphone.delegate respondsToSelector:@selector(microphone:hasBufferList:withBufferSize:withNumberOfChannels:)])
-    {
-        [microphone.delegate microphone:microphone
-                          hasBufferList:info->audioBufferList
-                         withBufferSize:inNumberFrames
-                   withNumberOfChannels:info->streamFormat.mChannelsPerFrame];
-    }
     
-    //
-    // Notify delegate of new float data processed
-    //
-    if ([microphone.delegate respondsToSelector:@selector(microphone:hasAudioReceived:withBufferSize:withNumberOfChannels:)])
-    {
-        //
-        // Convert to float
-        //
-        [microphone.floatConverter convertDataFromAudioBufferList:info->audioBufferList
-                                               withNumberOfFrames:inNumberFrames
-                                                   toFloatBuffers:info->floatData];
-        [microphone.delegate microphone:microphone
-                       hasAudioReceived:info->floatData
-                         withBufferSize:inNumberFrames
-                   withNumberOfChannels:info->streamFormat.mChannelsPerFrame];
+    memcpy(microphone.dspBuffer, info->audioBufferList->mBuffers[0].mData, info->audioBufferList->mBuffers[0].mDataByteSize);
+    if (microphone.dsp) {
+        microphone.dsp(microphone.dspBuffer, microphone.bufferSize);
     }
+    memcpy(info->audioBufferList->mBuffers[0].mData, microphone.dspBuffer, info->audioBufferList->mBuffers[0].mDataByteSize);
     
     return result;
 }
