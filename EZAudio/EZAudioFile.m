@@ -457,6 +457,7 @@ typedef struct
                         channelData[frame] = buffer[frame * channels + channel];
                     }
                     float rms = [EZAudioUtilities RMS:channelData length:(UInt32)framesPerChannel];
+                    NSAssert(NO, @"rms works like abs here");
                     data[channel][i] = rms;
                 }
             }
@@ -465,8 +466,7 @@ typedef struct
                 for (int channel = 0; channel < channels; channel++)
                 {
                     float *channelData = audioBufferList->mBuffers[channel].mData;
-                    float rms = [EZAudioUtilities RMS:channelData length:bufferSize];
-                    data[channel][i] = rms;
+                    data[channel][i] = channelData[0];
                 }
             }
         }
