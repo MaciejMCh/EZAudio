@@ -27,7 +27,10 @@
 #import "EZAudioFloatConverter.h"
 #import "EZAudioUtilities.h"
 #import "EZAudioDevice.h"
+
+#if TARGET_OS_OSX
 #import <CoreAudio/CoreAudio.h>
+#endif
 
 //------------------------------------------------------------------------------
 #pragma mark - Data Structures
@@ -531,7 +534,7 @@ static OSStatus EZAudioMicrophoneCallback(void                       *inRefCon,
                         operation:"Couldn't set default device on I/O unit"];
 #endif
     
-    
+#if TARGET_OS_OSX
     /* get the ID of the default input hardware */
     AudioDeviceID micID;
     UInt32 n;
@@ -557,7 +560,7 @@ static OSStatus EZAudioMicrophoneCallback(void                       *inRefCon,
     rc = AudioDeviceSetProperty(micID, NULL, 0, 1,
                                 kAudioDevicePropertyBufferFrameSize,
                                 sizeof(n), &n);
-    
+#endif
     
 //    [EZAudioDevice setProperty:512 ForSelector:kAudioDevicePropertyBufferFrameSize withDeviceID:deviceId];
 //    NSString *xD = [EZAudioDevice stringPropertyForSelector:kAudioDevicePropertyBufferFrameSize withDeviceID:deviceId];

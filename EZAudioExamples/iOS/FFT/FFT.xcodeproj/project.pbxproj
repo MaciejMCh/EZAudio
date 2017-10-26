@@ -164,6 +164,7 @@
 				TargetAttributes = {
 					66374EE81C545B18000B19D0 = {
 						CreatedOnToolsVersion = 7.2;
+						DevelopmentTeam = 76RXF4V6NR;
 					};
 				};
 			};
@@ -350,10 +351,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				DEVELOPMENT_TEAM = 76RXF4V6NR;
 				INFOPLIST_FILE = FFT/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				PRODUCT_BUNDLE_IDENTIFIER = com.sha.FFT;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mch.fft;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -362,10 +364,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				DEVELOPMENT_TEAM = 76RXF4V6NR;
 				INFOPLIST_FILE = FFT/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				PRODUCT_BUNDLE_IDENTIFIER = com.sha.FFT;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mch.fft;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
